@@ -1,3 +1,8 @@
+// Implementação das operações do grafo.
+// Convenções:
+// - Vértices externos (I/O) usam 1..n; internamente convertemos para 0..n-1.
+// - O grafo é não-direcionado: sempre atualizamos u<->v.
+// - Em grafos não ponderados, os pesos são tratados como 1.0.
 #include "Grafo.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -11,14 +16,16 @@ using std::vector;
 using std::priority_queue;
 using std::pair;
 
+// Construtor: inicializa contadores e aloca a estrutura conforme a representação.
 Grafo::Grafo(int numVertices, TipoRepresentacao rep, bool ponderado)
 : n(numVertices), m(0), tipo(rep), ponderado(ponderado),
   matrizAdj(nullptr), matrizPeso(nullptr), listaAdj(nullptr), listaPeso(nullptr), grauAdj(nullptr)
 {
-    if (tipo == MATRIZ) initMatriz();
-    else               initLista();
+    if (tipo == MATRIZ) initMatriz();   // matriz de adjacência + pesos
+    else               initLista();     // listas de adjacência + pesos
 }
 
+// Destrutor: desaloca toda memória associada à representação usada.
 Grafo::~Grafo() {
     if (tipo == MATRIZ) {
         for (int i = 0; i < n; i++) {
@@ -38,6 +45,7 @@ Grafo::~Grafo() {
     }
 }
 
+// Alocação e inicialização da matriz de adjacência e matriz de pesos.
 void Grafo::initMatriz() {
     matrizAdj  = new int*[n];
     matrizPeso = new double*[n];
@@ -49,6 +57,7 @@ void Grafo::initMatriz() {
     }
 }
 
+// Alocação das listas de adjacência: cada vértice possui até n posições disponíveis.
 void Grafo::initLista() {
     listaAdj   = new int*[n];
     listaPeso  = new double*[n];
@@ -59,6 +68,10 @@ void Grafo::initLista() {
     }
 }
 
+// Lê o grafo de um arquivo texto. Espera:
+//  - primeira linha: n
+//  - demais linhas: u v [peso]
+// Converte u,v de 1..n para 0..n-1 e adiciona aresta não-direcionada.
 bool Grafo::lerDeArquivo(const char *nomeArquivo) {
     FILE *f = fopen(nomeArquivo, "r");
     if (!f) return false;
@@ -85,6 +98,7 @@ bool Grafo::lerDeArquivo(const char *nomeArquivo) {
     return true;
 }
 
+// Insere uma aresta u<->v, evitando duplicatas. Atualiza pesos e contador de arestas.
 void Grafo::adicionaAresta(int u, int v, double peso) {
     if (tipo == MATRIZ) {
         if (matrizAdj[u][v] == 0) {
@@ -108,6 +122,7 @@ void Grafo::adicionaAresta(int u, int v, double peso) {
     }
 }
 
+// Retorna o grau do vértice u (0..n-1), conforme a representação.
 int Grafo::grauVertice(int u) const {
     if (tipo == MATRIZ) {
         int g = 0;
@@ -117,6 +132,7 @@ int Grafo::grauVertice(int u) const {
     return grauAdj[u];
 }
 
+// Escreve métricas básicas do grafo e a distribuição empírica de graus.
 bool Grafo::escreverInfo(const char *nomeSaida) const {
     FILE *f = fopen(nomeSaida, "w");
     if (!f) return false;
@@ -135,6 +151,8 @@ bool Grafo::escreverInfo(const char *nomeSaida) const {
     return true;
 }
 
+// BFS (Busca em Largura): gera vetores 'pai' e 'nivel' a partir de 'raiz1' (1..n).
+// Usa fila simples baseada em array para evitar dependências.
 bool Grafo::buscaLargura(int raiz1, const char *nomeSaida) const {
     int raiz = raiz1 - 1;
     bool *vis   = new bool[n]();
@@ -195,6 +213,7 @@ bool Grafo::buscaLargura(int raiz1, const char *nomeSaida) const {
     return true;
 }
 
+// DFS recursivo: visita vizinhos e preenche pai/nivel.
 void Grafo::dfsRec(int u, bool *vis, int *pai, int *nivel) const {
     vis[u] = true;
     if (tipo == MATRIZ) {
@@ -214,6 +233,7 @@ void Grafo::dfsRec(int u, bool *vis, int *pai, int *nivel) const {
     }
 }
 
+// DFS (Busca em Profundidade): invoca dfsRec e grava pai/nivel no arquivo.
 bool Grafo::buscaProfundidade(int raiz1, const char *nomeSaida) const {
     int raiz = raiz1 - 1;
     bool *vis = new bool[n]();
@@ -240,6 +260,9 @@ bool Grafo::buscaProfundidade(int raiz1, const char *nomeSaida) const {
     return true;
 }
 
+// Componentes conexas (em grafo não-direcionado):
+// explora o grafo por BFS múltiplas vezes, agregando vértices por componente
+// e depois ordena as componentes por tamanho (decrescente) para exibição.
 bool Grafo::componentesConexas(const char *nomeSaida) const {
     bool *vis = new bool[n]();
     int **compVerts = new int*[n];
@@ -296,6 +319,10 @@ bool Grafo::componentesConexas(const char *nomeSaida) const {
     return true;
 }
 
+// Caminhos mínimos a partir de 'origem' (1..n):
+// - Se houver pesos positivos, aplica-se Dijkstra.
+// - Se o grafo não for ponderado, distâncias equivalem a BFS com peso 1.
+// Saída por vértice: id:dist:caminho (sequência de vértices 1..n separados por '-').
 bool Grafo::caminhosMinimos(int origem1, const char *nomeSaida) const {
     int origem = origem1 - 1;
     const double INF = std::numeric_limits<double>::infinity();
@@ -348,6 +375,7 @@ bool Grafo::caminhosMinimos(int origem1, const char *nomeSaida) const {
     return true;
 }
 
+// Versão que delega para 'caminhosMinimos' e deixa a filtragem do destino a cargo do usuário.
 bool Grafo::caminhoMinimo(int origem, int destino, const char *nomeSaida) const {
     // calcula todos e filtra apenas destino
     const bool ok = caminhosMinimos(origem, nomeSaida);
